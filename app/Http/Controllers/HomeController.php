@@ -5,12 +5,10 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use DB;
 use Config;
-//use App\Exports\ExcelExport;
-//use Maatwebsite\Excel\Facades\Excel;
+use Rap2hpoutre\FastExcel\FastExcel;
 use Session;
 use ReflectionClass;
 use Cache;
-use Illuminate\Support\Facades\Input;
 use Illuminate\Pagination\LengthAwarePaginator;
 
 class HomeController extends Controller
@@ -43,9 +41,9 @@ class HomeController extends Controller
 	
 	public function paginacion($array, $request)
 	{
-		$page = Input::get('page', 1);
+		$page = \Request::input('page', 1);
 		
-		$perPage = 5;
+		$perPage = 20;
 		
 		$offset = ($page * $perPage) - $perPage;
 
@@ -60,6 +58,7 @@ class HomeController extends Controller
 		try
 		{
 			
+			$request->session()->forget(['db_host', 'db_usuario','db_contrasenia']);
 			
 			//Guardo el host, usuario y contraseña definidos en el form_host para hacer la conexión, en variables de sesión; mientras dure la sesión y no se modifiquen, la conexión siempre se va a realizar con estos valores
 			$request->session()->put('db_host',$request->db_host);
@@ -99,8 +98,7 @@ class HomeController extends Controller
 			//Retorno al home con los datos de la consulta
 			return view('home',['bases' => $bases,'db_usuario' => $db_usuario,'db_host' => $db_host]);
 			
-		}
-		catch (\Exception $e) {
+		}catch (\Exception $e) {
 			
 			//En caso de error retorno al home con el mensaje del error
 			$mensaje_error = $e->getMessage();
@@ -156,11 +154,16 @@ class HomeController extends Controller
 			
 			$charset = $charset_registro[0]->server_encoding;
 			
+			$request->session()->forget('charset_def');
+			
 			$request->session()->put('charset_def',$charset);
 			
-			if(count($schemas) == 1 && $schemas[0]->schema_name == 'public'){
+			$request->session()->forget(['schema', 'database']);
+			
+			//Si sólo existe un schema, me salteo la vista para seleccionar el schema y voy directo a la consulta con los valores del schema mismo y la base de datos.
+			if(count($schemas) == 1){
 				
-				$request->session()->put('schema','public');
+				$request->session()->put('schema',$schemas[0]->schema_name);
 				
 				$request->session()->put('database',$database);
 				
@@ -203,8 +206,6 @@ class HomeController extends Controller
 				
 			}
 			
-			//echo $schema; exit;
-			
 			$db_usuario = $request->session()->get('db_usuario');
 			
 			$db_host = $request->session()->get('db_host');
@@ -226,8 +227,75 @@ class HomeController extends Controller
 			//Realizo la conexión	
 			$conexion = DB::connection('pgsql_variable');
 			
+			$datos = NULL;
+			
+			$count_datos = 0;
+			
+			$consulta = NULL;
+			
+			$mensaje_error = NULL;
+			
+			if(isset($request->consulta)){
+				
+				ini_set('memory_limit', -1);
+				
+				$consulta = $request->consulta;
+				
+				if(Cache::get('consulta') == $request->consulta){
+					
+					$datos = Cache::get('datos');
+
+					$count_datos = Cache::get('count_datos');
+					
+					//$datos = $this->paginacion($datos,$request);
+					
+					
+				}else{
+					
+					try
+					{
+						
+						Cache::put('consulta',$consulta,3600);
+						
+						Cache::forget('datos');
+
+						Cache::forget('count_datos');
+
+						$datos = $conexion->select($consulta);
+
+						$count_datos = count($datos);
+						
+						Cache::put('datos',$datos,3600);
+						
+						Cache::put('count_datos',$count_datos,3600);
+
+						//$datos = $this->paginacion($datos,$request);
+
+					}
+					catch (\Exception $e)
+					{
+
+						//En caso de error retorno al home con el mensaje del error
+						$mensaje_error = $e->getMessage();
+
+
+					}
+					
+				}
+				
+			}
+			
 			//Retorno al home con los datos de las consultas
-			return view('home',['database' => $database,'schema' => $schema,'db_usuario' => $db_usuario,'db_host' => $db_host]);
+			return view('home',['database' => $database,
+								'schema' => $schema,
+								'db_usuario' => $db_usuario,
+								'db_host' => $db_host,
+							    'datos' => $datos,
+								'count_datos' => $count_datos,
+								'consulta' => $consulta,
+								'mensaje_error' => $mensaje_error,
+								'charset_def' => $charset_def
+							   ]);
 			
 		}else{
 			
@@ -237,5 +305,47 @@ class HomeController extends Controller
 		}
 		
     }
+	
+	public function export_excel(Request $request){
+		
+		ini_set('memory_limit', -1);
+		
+		$date = date('dmYGis');
+		
+		$datos = Cache::get('datos');
+		
+		$charset_def = $request->session()->get('charset_def');
+		
+		if($charset_def !== 'UTF8'){
+			
+			
+			foreach($datos as $dato){
+			
+				foreach($dato as $key => $value){
+
+					$array_dato_encode[$key] = utf8_encode($value);
+
+				}
+
+				$array_datos[] = $array_dato_encode;
+
+			}
+			
+			
+		}else{
+			
+			$array_datos = $datos;
+			
+		}
+		
+		
+		
+		//print_r($array_datos); exit;
+		
+		$list = collect($array_datos);
+		
+		return (new FastExcel($list))->download('resultados_consulta_'.$date.'.xlsx');
+		
+	}
 	
 }

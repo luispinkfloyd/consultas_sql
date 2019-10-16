@@ -18,10 +18,14 @@
 		margin: 13px auto auto auto;
 	}
 	.tabla-resultados{
-		max-width:90%;
-		max-height:350px;
+		max-width:95%;
+		max-height:450px;
 		margin:5px auto;
 		white-space:nowrap;
+	}
+	.consulta-style{
+		max-width:95%;
+		margin:15px auto;
 	}
 	.cartel-host{
 		max-width:50%;
@@ -59,6 +63,15 @@
     </div>
 @endif
 
+@if(isset($mensaje_error))
+    <div class="alert alert-danger alert-dismissible fade show" role="alert" style="max-width:600px;margin:5px auto 10px auto" align="center">
+      <strong>{{ $mensaje_error }}</strong>
+      <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+        <span aria-hidden="true">&times;</span>
+      </button>
+    </div>
+@endif
+
 @if(isset($db_host) && isset($db_usuario))
 
 	<div class="alert-success cartel-host" align="center">
@@ -78,8 +91,25 @@
     
 @elseif(isset($schema))
 	
+	@include('forms.form_consulta_cabecera')
+	
+	@include('forms.form_consulta')
 
-	<div class="container"><p>Form para realizar la consulta sql (en construcción).</p></div>
+	@if(isset($datos) && $count_datos > 0)
+
+		@include('tablas.tabla_resultados')
+
+	@elseif(isset($datos) && $count_datos === 0)
+	
+		<div class="container tabla-registros">
+			<div class="row">
+				<div class="col-md-12" align="center">
+					<p class="text-danger">No se encontro ningún registro.</p>
+				</div>
+			</div>
+		</div>
+	
+	@endif
 
 @else
 
