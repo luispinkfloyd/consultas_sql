@@ -20,7 +20,7 @@
 	.tabla-resultados{
 		max-width:95%;
 		max-height:450px;
-		margin:5px auto;
+		margin:auto;
 		white-space:nowrap;
 	}
 	.consulta-style{
@@ -49,10 +49,31 @@
 	.borde{
 		border:#888888 solid 1px;
 	}
+    .CodeMirror {
+        width: 100%;
+        height: auto;
+        min-height: 100px;
+        border-radius: 5px;
+    }
+    .redondeado{
+        border-radius: 5px;
+    }
+    .borde-top{
+		border:#888888 solid 1px;
+        border-top: none;
+        border-radius: 0px 0px 5px 5px;
+	}
+    .borde-bottom{
+		border:#888888 solid 1px;
+        border-bottom: none;
+        border-radius: 5px 5px 0px 0px;
+	}
 </style>
 @endsection
 
 @section('content')
+
+
 
 @if(session()->get('mensaje_error'))
     <div class="alert alert-danger alert-dismissible fade show" role="alert" style="max-width:600px;margin:5px auto 10px auto" align="center">
@@ -74,25 +95,32 @@
 
 @if(isset($db_host) && isset($db_usuario))
 
-	<div class="alert-success cartel-host" align="center">
-    	<p><h4><b><small>Host:</small>{{$db_host}} <small>Usuario:</small>{{$db_usuario}} <a class="btn btn-info" href="{{ url('/') }}">Volver a seleccionar todo</a></b></h4></p>
+    <div class="alert-success cartel-host" align="center">
+        <div class="row">
+            <div class="col-7 mt-2" align="right">
+                <h5><b><small>Host:</small>{{$db_host}} <small>Usuario:</small>{{$db_usuario}}</b></h5>
+            </div>
+            <div class="col mt-1 mb-1" align="left">
+                <a class="btn btn-sm btn-info" href="{{ url('/') }}">Volver a seleccionar todo</a>
+            </div>
+        </div>
     </div>
-	
+
 @endif
 
 
 @if(isset($bases))
 
     @include('forms.form_database')
-    
+
 @elseif(isset($database) && !isset($schema))
 
 	@include('forms.form_schema')
-    
+
 @elseif(isset($schema))
-	
+
 	@include('forms.form_consulta_cabecera')
-	
+
 	@include('forms.form_consulta')
 
 	@if(isset($datos) && $count_datos > 0)
@@ -100,7 +128,7 @@
 		@include('tablas.tabla_resultados')
 
 	@elseif(isset($datos) && $count_datos === 0)
-	
+
 		<div class="container tabla-registros">
 			<div class="row">
 				<div class="col-md-12" align="center">
@@ -108,13 +136,13 @@
 				</div>
 			</div>
 		</div>
-	
+
 	@endif
 
 @else
 
     @include('forms.form_host')
-    
+
 @endif
 
 @endsection
