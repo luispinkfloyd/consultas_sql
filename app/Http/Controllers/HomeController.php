@@ -10,6 +10,7 @@ use Session;
 use ReflectionClass;
 use Cache;
 use Illuminate\Pagination\LengthAwarePaginator;
+use App\Consulta;
 
 class HomeController extends Controller
 {
@@ -28,12 +29,16 @@ class HomeController extends Controller
      *
      * @return \Illuminate\Contracts\Support\Renderable
      */
-    public function index()
+    public function index(Request $request)
     {
 
 		//Primero retorna la vista con el formulario para conectarse al host
 
-		Cache::flush();
+        Cache::flush();
+
+        $request->session()->forget('db_usuario_sql');
+        $request->session()->forget('db_host_sql');
+        $request->session()->forget('db_contrasenia_sql');
 
 		return view('home');
 
@@ -58,19 +63,24 @@ class HomeController extends Controller
 		try
 		{
 
-			$request->session()->forget(['db_host_sql', 'db_usuario_sql','db_contrasenia_sql']);
+            //echo $request->db_host.'<br>'.$request->db_usuario.'<br>'.$request->db_contrasenia; exit;
 
-			//Guardo el host, usuario y contraseña definidos en el form_host para hacer la conexión, en variables de sesión; mientras dure la sesión y no se modifiquen, la conexión siempre se va a realizar con estos valores
-			$request->session()->put('db_host_sql',$request->db_host);
+            if($request->session()->get('db_usuario_sql') === NULL && $request->session()->get('db_host_sql') === NULL){
 
-			$request->session()->put('db_usuario_sql',$request->db_usuario);
+				$request->session()->put('db_host_sql',$request->db_host);
 
-			$request->session()->put('db_contrasenia_sql',$request->db_contrasenia);
+				$request->session()->put('db_usuario_sql',$request->db_usuario);
+
+				$request->session()->put('db_contrasenia_sql',$request->db_contrasenia);
+
+			}
 
 			//Traigo los valores de la conexión para manejarlos como variantes directamente (menos la contraseña)
 			$db_usuario = $request->session()->get('db_usuario_sql');
 
-			$db_host = $request->session()->get('db_host_sql');
+            $db_host = $request->session()->get('db_host_sql');
+
+            //echo $db_host; echo $db_usuario; echo $request->session()->get('db_contrasenia_sql'); exit;
 
 			//Genero el modelo de la conexión pgsql_variable con los valores definidos, y realizo la conexión
 			Config::set('database.connections.pgsql_variable_sql', array(
@@ -190,21 +200,33 @@ class HomeController extends Controller
 		if($request->session()->get('db_usuario_sql') !== NULL && $request->session()->get('db_host_sql') !== NULL){
 
 			//Traigo los inputs session y la base de datos seleccionada más el schema seleccionado en el form_schema
-			$database = $request->database;
+            //$database = $request->database;
 
-			if(isset($request->database) && isset($request->schema)){
+            if(isset($request->database)){
 
-				$database = $request->database;
-
-				$schema = $request->schema;
+                $database = $request->database;
+                $request->session()->forget('database_sql');
+                $request->session()->put('database_sql',$database);
 
 			}else{
 
-				$schema = $request->session()->get('schema_sql');
+                $database = $request->session()->get('database_sql');
 
-				$database = $request->session()->get('database_sql');
 
-			}
+            }
+
+            if(isset($request->schema)){
+
+                $schema = $request->schema;
+                $request->session()->forget('schema_sql');
+                $request->session()->put('schema_sql',$schema);
+
+
+			}else{
+
+                $schema = $request->session()->get('schema_sql');
+
+            }
 
 			$db_usuario = $request->session()->get('db_usuario_sql');
 
@@ -233,7 +255,23 @@ class HomeController extends Controller
 
 			$consulta = NULL;
 
-			$mensaje_error = NULL;
+            $mensaje_error = NULL;
+
+            $consulta_input_selected = NULL;
+
+            $consulta_select_selected = NULL;
+
+            if(isset($request->consulta_input)){
+
+                $consulta_input_selected = $request->consulta_input;
+
+            }
+
+            if(isset($request->consulta_select)){
+
+                $consulta_select_selected = $request->consulta_select;
+
+            }
 
 			if(isset($request->consulta)){
 
@@ -287,7 +325,45 @@ class HomeController extends Controller
 
 				}
 
+            }
+
+            $mensaje_success = NULL;
+
+            if(isset($request->consulta_hidden)){
+
+				ini_set('memory_limit', -1);
+
+                $consulta = $request->consulta_hidden;
+
+                //echo $consulta; exit;
+
+				try
+				{
+
+                    $consulta_save = new Consulta();
+
+                    $consulta_save->sector = $request->sector;
+                    $consulta_save->nombre = $request->nombre;
+                    $consulta_save->consulta = $consulta;
+
+                    $consulta_save->save();
+
+                    $mensaje_success = 'Consulta guardada correctamente.';
+
+
+				}
+				catch (\Exception $e)
+				{
+
+					//En caso de error retorno al home con el mensaje del error
+					$mensaje_error = $e->getMessage();
+
+
+				}
+
 			}
+
+            $sectores = Consulta::distinct()->get(['sector']);
 
 			//Retorno al home con los datos de las consultas
 			return view('home',['database' => $database,
@@ -297,8 +373,12 @@ class HomeController extends Controller
 							    'datos' => $datos,
 								'count_datos' => $count_datos,
 								'consulta' => $consulta,
-								'mensaje_error' => $mensaje_error,
-								'charset_def' => $charset_def
+                                'mensaje_error' => $mensaje_error,
+                                'mensaje_success' => $mensaje_success,
+                                'charset_def' => $charset_def,
+                                'sectores' => $sectores,
+                                'consulta_input_selected' => $consulta_input_selected,
+                                'consulta_select_selected' => $consulta_select_selected,
 							   ]);
 
 		}else{
@@ -377,6 +457,40 @@ class HomeController extends Controller
 
 		return (new FastExcel($list))->download('resultados_consulta_'.$date.'.xlsx');
 
-	}
+    }
+
+    public function ajax_get_consulta(REQUEST $request){
+
+        $consulta_array = array();
+
+        $sector = $request->consulta_select_value;
+
+        $consultas_nombres = Consulta::where('sector', $sector)->get();
+
+        foreach($consultas_nombres as $consulta_nombre) {
+            $consulta_array[$consulta_nombre->id] = (array) $consulta_nombre->nombre;
+        }
+
+		return response()->json($consulta_array);
+
+
+    }
+
+    public function ajax_set_consulta(REQUEST $request){
+
+        $consulta_text = '';
+
+        $nombre = $request->consulta_input_value;
+
+        $consultas_text = Consulta::where('nombre', $nombre)->get();
+
+        foreach($consultas_text as $consulta_text_item) {
+            $consulta_text = $consulta_text_item->consulta;
+        }
+
+		return $consulta_text;
+
+
+    }
 
 }

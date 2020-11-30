@@ -29,4 +29,8 @@ Route::get('/export_excel', 'HomeController@export_excel')->name('export_excel')
 
 Route::get('/export_sql', 'HomeController@export_sql')->name('export_sql');
 
+Route::get('/ajax_get_consulta', 'HomeController@ajax_get_consulta')->name('ajax_get_consulta');
+
+Route::get('/ajax_set_consulta', 'HomeController@ajax_set_consulta')->name('ajax_set_consulta');
+
 //Route::post('/consulta', 'HomeController@consulta')->name('consulta');
